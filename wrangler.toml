@@ -1,0 +1,34 @@
+name = "puzzle-game-api"
+main = "src/index.js"
+compatibility_date = "2023-12-01"
+
+# KV Namespaces
+[[kv_namespaces]]
+binding = "PLAYER_KV"
+preview_id = "preview_id_here"
+id = "production_id_here"
+
+# D1 Database
+[[d1_databases]]
+binding = "DB"
+database_name = "puzzle-game-db"
+database_id = "database_id_here"
+
+# R2 Bucket
+[[r2_buckets]]
+binding = "PUZZLE_BUCKET"
+bucket_name = "puzzle-assets"
+
+# Environment Variables
+[vars]
+ADMIN_PASSWORD = "admin123"
+ENVIRONMENT = "development"
+
+# Build configuration
+[build]
+command = "npm run build:worker"
+
+# Routes for custom domain (optional)
+# routes = [
+#   { pattern = "puzzle-api.example.com/*", zone_name = "example.com" }
+# ]
