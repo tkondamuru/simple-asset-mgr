@@ -19,7 +19,11 @@ ENVIRONMENT = "development"
 
 # Build configuration
 [build]
-command = "npm run build:worker"
+command = "npm run build"
+
+# Site binding for serving SPA
+[site]
+bucket = "./spa/dist"
 
 # Routes for custom domain (optional)
 # routes = [
