@@ -9,6 +9,8 @@
  * - DELETE /api/puzzles/:id: Deletes a puzzle.
  */
 
+import { getAssetFromKV } from '@cloudflare/kv-asset-handler';
+
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
@@ -28,36 +30,80 @@ export default {
 
     let response;
     try {
-      const apiPath = pathname.replace(/^(\/api)/, '');
-      const segments = apiPath.split('/').filter(Boolean);
-      
-      if (segments[0] === 'puzzles') {
-        const puzzleId = segments[1];
+      // Handle API routes
+      if (pathname.startsWith('/api/')) {
+        const apiPath = pathname.replace(/^(\/api)/, '');
+        const segments = apiPath.split('/').filter(Boolean);
         
-        switch (method) {
-          case 'GET':
-            response = puzzleId
-              ? await getPuzzle(puzzleId, env)
-              : await getPuzzles(env);
-            break;
-          case 'POST':
-            response = await addPuzzle(request, env);
-            break;
-          case 'PUT':
-            response = puzzleId
-              ? await updatePuzzle(request, puzzleId, env)
-              : new Response('Not Found', { status: 404 });
-            break;
-          case 'DELETE':
-            response = puzzleId
-              ? await deletePuzzle(puzzleId, env)
-              : new Response('Not Found', { status: 404 });
-            break;
-          default:
-            response = new Response('Method Not Allowed', { status: 405 });
+        if (segments[0] === 'puzzles') {
+          const puzzleId = segments[1];
+          
+          switch (method) {
+            case 'GET':
+              response = puzzleId
+                ? await getPuzzle(puzzleId, env)
+                : await getPuzzles(env);
+              break;
+            case 'POST':
+              response = await addPuzzle(request, env);
+              break;
+            case 'PUT':
+              response = puzzleId
+                ? await updatePuzzle(request, puzzleId, env)
+                : new Response('Not Found', { status: 404 });
+              break;
+            case 'DELETE':
+              response = puzzleId
+                ? await deletePuzzle(puzzleId, env)
+                : new Response('Not Found', { status: 404 });
+              break;
+            default:
+              response = new Response('Method Not Allowed', { status: 405 });
+          }
+        } else {
+          response = new Response('Not Found', { status: 404 });
         }
       } else {
-        response = new Response('Not Found', { status: 404 });
+        // Handle static assets and SPA routing
+        try {
+          response = await getAssetFromKV(
+            {
+              request,
+              waitUntil: ctx.waitUntil.bind(ctx),
+            },
+            {
+              ASSET_NAMESPACE: env.__STATIC_CONTENT,
+              ASSET_MANIFEST: env.__STATIC_CONTENT_MANIFEST,
+              // For SPA routing, serve index.html for all non-asset requests
+              mapRequestToAsset: (req) => {
+                const url = new URL(req.url);
+                // If it's a file with extension, serve it as-is
+                if (url.pathname.includes('.')) {
+                  return new Request(req.url, req);
+                }
+                // Otherwise, serve index.html for SPA routing
+                const indexUrl = new URL('/index.html', req.url);
+                return new Request(indexUrl.toString(), req);
+              },
+            }
+          );
+        } catch (e) {
+          // If asset not found, serve index.html for SPA routing
+          try {
+            response = await getAssetFromKV(
+              {
+                request: new Request(new URL('/index.html', request.url).toString(), request),
+                waitUntil: ctx.waitUntil.bind(ctx),
+              },
+              {
+                ASSET_NAMESPACE: env.__STATIC_CONTENT,
+                ASSET_MANIFEST: env.__STATIC_CONTENT_MANIFEST,
+              }
+            );
+          } catch (e) {
+            response = new Response('Not Found', { status: 404 });
+          }
+        }
       }
     } catch (error) {
       console.error('Error:', error);

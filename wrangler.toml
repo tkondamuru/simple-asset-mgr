@@ -25,3 +25,4 @@ ENVIRONMENT = "development"
 # Site binding for serving SPA
 [site]
 bucket = "./spa/dist"
+entry-point = "workers-site"
