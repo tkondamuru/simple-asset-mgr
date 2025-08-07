@@ -2,17 +2,11 @@ name = "puzzle-game-api"
 main = "src/index.js"
 compatibility_date = "2023-12-01"
 
-# KV Namespaces
-[[kv_namespaces]]
-binding = "PLAYER_KV"
-preview_id = "preview_id_here"
-id = "production_id_here"
-
 # D1 Database
 [[d1_databases]]
 binding = "DB"
 database_name = "puzzle-game-db"
-database_id = "database_id_here"
+database_id = "3d0041cc-7075-42bd-b34b-f96c54e0d1b7"
 
 # R2 Bucket
 [[r2_buckets]]
@@ -21,7 +15,6 @@ bucket_name = "puzzle-assets"
 
 # Environment Variables
 [vars]
-ADMIN_PASSWORD = "admin123"
 ENVIRONMENT = "development"
 
 # Build configuration

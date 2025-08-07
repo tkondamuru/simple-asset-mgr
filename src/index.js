@@ -1,12 +1,18 @@
 /**
- * Puzzle Game API - Cloudflare Worker
- * Implements all endpoints for the puzzle game API
+ * Simple Asset Manager API - Cloudflare Worker
+ *
+ * Endpoints:
+ * - GET /api/puzzles: Returns a list of all puzzles.
+ * - POST /api/puzzles: Adds a new puzzle with multiple file uploads.
+ * - GET /api/puzzles/:id: Returns a single puzzle.
+ * - PUT /api/puzzles/:id: Updates a puzzle.
+ * - DELETE /api/puzzles/:id: Deletes a puzzle.
  */
 
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
-    const { pathname, searchParams } = url;
+    const { pathname } = url;
     const method = request.method;
 
     // CORS headers
@@ -16,364 +22,190 @@ export default {
       'Access-Control-Allow-Headers': 'Content-Type, Authorization',
     };
 
-    // Handle preflight requests
     if (method === 'OPTIONS') {
       return new Response(null, { headers: corsHeaders });
     }
 
+    let response;
     try {
-      let response;
-
-      // Route handling
-      switch (true) {
-        case method === 'POST' && pathname === '/register':
-          response = await handleRegister(request, env);
-          break;
+      const apiPath = pathname.replace(/^(\/api)/, '');
+      const segments = apiPath.split('/').filter(Boolean);
+      
+      if (segments[0] === 'puzzles') {
+        const puzzleId = segments[1];
         
-        case method === 'GET' && pathname === '/puzzles':
-          response = await handleGetPuzzles(env);
-          break;
-        
-        case method === 'POST' && pathname === '/score':
-          response = await handlePostScore(request, env);
-          break;
-        
-        case method === 'GET' && pathname.startsWith('/scores/'):
-          const playerName = pathname.split('/scores/')[1];
-          response = await handleGetScores(playerName, env);
-          break;
-        
-        case method === 'GET' && pathname === '/search':
-          const query = searchParams.get('q');
-          response = await handleSearchPuzzles(query, env);
-          break;
-        
-        case method === 'POST' && pathname === '/upload-image':
-          response = await handleUploadImage(request, env);
-          break;
-        
-        case method === 'POST' && pathname === '/add-puzzle':
-          response = await handleAddPuzzle(request, env);
-          break;
-        
-        case method === 'POST' && pathname === '/verify-admin':
-          response = await handleVerifyAdmin(request, env);
-          break;
-        
-        case method === 'PUT' && pathname === '/update-admin':
-          response = await handleUpdateAdmin(request, env);
-          break;
-        
-        default:
-          response = new Response('Not Found', { status: 404 });
+        switch (method) {
+          case 'GET':
+            response = puzzleId
+              ? await getPuzzle(puzzleId, env)
+              : await getPuzzles(env);
+            break;
+          case 'POST':
+            response = await addPuzzle(request, env);
+            break;
+          case 'PUT':
+            response = puzzleId
+              ? await updatePuzzle(request, puzzleId, env)
+              : new Response('Not Found', { status: 404 });
+            break;
+          case 'DELETE':
+            response = puzzleId
+              ? await deletePuzzle(puzzleId, env)
+              : new Response('Not Found', { status: 404 });
+            break;
+          default:
+            response = new Response('Method Not Allowed', { status: 405 });
+        }
+      } else {
+        response = new Response('Not Found', { status: 404 });
       }
-
-      // Add CORS headers to response
-      Object.entries(corsHeaders).forEach(([key, value]) => {
-        response.headers.set(key, value);
-      });
-
-      return response;
-
     } catch (error) {
       console.error('Error:', error);
-      const errorResponse = new Response(
-        JSON.stringify({ error: 'Internal Server Error', message: error.message }), 
-        { status: 500, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
+      response = new Response(
+        JSON.stringify({ error: 'Internal Server Error', message: error.message }),
+        { status: 500, headers: { 'Content-Type': 'application/json' } }
       );
-      return errorResponse;
     }
+
+    Object.entries(corsHeaders).forEach(([key, value]) => {
+      response.headers.set(key, value);
+    });
+
+    return response;
   },
 };
 
-/**
- * 1. POST /register - Register a new player
- */
-async function handleRegister(request, env) {
-  const { name } = await request.json();
+// GET /puzzles
+async function getPuzzles(env) {
+  const { results } = await env.DB.prepare('SELECT * FROM puzzles ORDER BY created_at DESC').all();
   
-  if (!name || typeof name !== 'string' || name.trim().length === 0) {
-    return new Response(
-      JSON.stringify({ error: 'Name is required' }), 
-      { status: 400, headers: { 'Content-Type': 'application/json' } }
-    );
-  }
-
-  // Check if player already exists in KV
-  const existingPlayer = await env.PLAYER_KV.get(name.trim());
-  
-  if (existingPlayer) {
-    return new Response(
-      JSON.stringify({ error: 'Name is already taken' }), 
-      { status: 409, headers: { 'Content-Type': 'application/json' } }
-    );
-  }
-
-  // Store player in KV
-  await env.PLAYER_KV.put(name.trim(), JSON.stringify({
-    name: name.trim(),
-    registeredAt: new Date().toISOString()
+  const puzzles = results.map(p => ({
+    ...p,
+    tags: JSON.parse(p.tags || '[]'),
+    img: JSON.parse(p.img || '[]'),
   }));
 
-  return new Response(
-    JSON.stringify({ message: 'Player registered successfully', name: name.trim() }), 
-    { status: 200, headers: { 'Content-Type': 'application/json' } }
-  );
-}
-
-/**
- * 2. GET /puzzles - Get all available puzzles
- */
-async function handleGetPuzzles(env) {
-  const stmt = env.DB.prepare('SELECT * FROM puzzles ORDER BY created_at DESC');
-  const result = await stmt.all();
-  
-  const puzzles = result.results.map(puzzle => ({
-    id: puzzle.id,
-    name: puzzle.name,
-    description: puzzle.description,
-    tags: JSON.parse(puzzle.tags || '[]'),
-    pieces: puzzle.pieces,
-    svg: puzzle.svg_url
-  }));
-
-  return new Response(
-    JSON.stringify(puzzles), 
-    { status: 200, headers: { 'Content-Type': 'application/json' } }
-  );
-}
-
-/**
- * 3. POST /score - Save puzzle completion record
- */
-async function handlePostScore(request, env) {
-  const { name, puzzleId, timeSeconds } = await request.json();
-  
-  if (!name || !puzzleId || !timeSeconds) {
-    return new Response(
-      JSON.stringify({ error: 'name, puzzleId, and timeSeconds are required' }), 
-      { status: 400, headers: { 'Content-Type': 'application/json' } }
-    );
-  }
-
-  // Verify player exists
-  const player = await env.PLAYER_KV.get(name);
-  if (!player) {
-    return new Response(
-      JSON.stringify({ error: 'Player not found. Please register first.' }), 
-      { status: 404, headers: { 'Content-Type': 'application/json' } }
-    );
-  }
-
-  // Verify puzzle exists
-  const puzzleStmt = env.DB.prepare('SELECT id FROM puzzles WHERE id = ?');
-  const puzzleResult = await puzzleStmt.first(puzzleId);
-  
-  if (!puzzleResult) {
-    return new Response(
-      JSON.stringify({ error: 'Puzzle not found' }), 
-      { status: 404, headers: { 'Content-Type': 'application/json' } }
-    );
-  }
-
-  // Insert score
-  const stmt = env.DB.prepare(
-    'INSERT INTO scores (player_name, puzzle_id, time_seconds) VALUES (?, ?, ?)'
-  );
-  await stmt.run(name, puzzleId, timeSeconds);
-
-  return new Response(
-    JSON.stringify({ message: 'Score saved successfully' }), 
-    { status: 200, headers: { 'Content-Type': 'application/json' } }
-  );
-}
-
-/**
- * 4. GET /scores/:name - Get all completed puzzles for a player
- */
-async function handleGetScores(playerName, env) {
-  if (!playerName) {
-    return new Response(
-      JSON.stringify({ error: 'Player name is required' }), 
-      { status: 400, headers: { 'Content-Type': 'application/json' } }
-    );
-  }
-
-  const stmt = env.DB.prepare(`
-    SELECT s.*, p.name as puzzle_name, p.description as puzzle_description 
-    FROM scores s 
-    JOIN puzzles p ON s.puzzle_id = p.id 
-    WHERE s.player_name = ? 
-    ORDER BY s.completed_at DESC
-  `);
-  
-  const result = await stmt.all(playerName);
-
-  return new Response(
-    JSON.stringify(result.results), 
-    { status: 200, headers: { 'Content-Type': 'application/json' } }
-  );
-}
-
-/**
- * 5. GET /search?q=keyword - Search puzzles by name, description, or tags
- */
-async function handleSearchPuzzles(query, env) {
-  if (!query) {
-    return new Response(
-      JSON.stringify({ error: 'Search query is required' }), 
-      { status: 400, headers: { 'Content-Type': 'application/json' } }
-    );
-  }
-
-  const searchTerm = `%${query.toLowerCase()}%`;
-  const stmt = env.DB.prepare(`
-    SELECT * FROM puzzles 
-    WHERE LOWER(name) LIKE ? 
-       OR LOWER(description) LIKE ? 
-       OR LOWER(tags) LIKE ?
-    ORDER BY name
-  `);
-  
-  const result = await stmt.all(searchTerm, searchTerm, searchTerm);
-  
-  const puzzles = result.results.map(puzzle => ({
-    id: puzzle.id,
-    name: puzzle.name,
-    description: puzzle.description,
-    tags: JSON.parse(puzzle.tags || '[]'),
-    pieces: puzzle.pieces,
-    svg: puzzle.svg_url
-  }));
-
-  return new Response(
-    JSON.stringify(puzzles), 
-    { status: 200, headers: { 'Content-Type': 'application/json' } }
-  );
-}
-
-/**
- * 6. POST /upload-image - Upload SVG file to R2 bucket
- */
-async function handleUploadImage(request, env) {
-  const formData = await request.formData();
-  const file = formData.get('file');
-  
-  if (!file) {
-    return new Response(
-      JSON.stringify({ error: 'No file provided' }), 
-      { status: 400, headers: { 'Content-Type': 'application/json' } }
-    );
-  }
-
-  // Generate unique filename
-  const puzzleId = `puzzle-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-  const filename = `${puzzleId}.svg`;
-  
-  // Upload to R2
-  await env.PUZZLE_BUCKET.put(filename, file.stream(), {
-    httpMetadata: {
-      contentType: 'image/svg+xml',
-    },
+  return new Response(JSON.stringify(puzzles), {
+    status: 200,
+    headers: { 'Content-Type': 'application/json' },
   });
-
-  // Construct public URL (adjust domain as needed)
-  const url = `https://your-account.r2.dev/puzzles/${filename}`;
-
-  return new Response(
-    JSON.stringify({ url, id: puzzleId }), 
-    { status: 200, headers: { 'Content-Type': 'application/json' } }
-  );
 }
 
-/**
- * 7. POST /add-puzzle - Add a new puzzle (admin-only)
- */
-async function handleAddPuzzle(request, env) {
-  const { puzzleId, name, description, tags, pieces, svg } = await request.json();
+// GET /puzzles/:id
+async function getPuzzle(id, env) {
+  const puzzle = await env.DB.prepare('SELECT * FROM puzzles WHERE id = ?').bind(id).first();
+
+  if (!puzzle) {
+    return new Response('Puzzle not found', { status: 404 });
+  }
   
-  if (!puzzleId || !name || !pieces) {
-    return new Response(
-      JSON.stringify({ error: 'puzzleId, name, and pieces are required' }), 
-      { status: 400, headers: { 'Content-Type': 'application/json' } }
-    );
+  puzzle.tags = JSON.parse(puzzle.tags || '[]');
+  puzzle.img = JSON.parse(puzzle.img || '[]');
+
+  return new Response(JSON.stringify(puzzle), {
+    status: 200,
+    headers: { 'Content-Type': 'application/json' },
+  });
+}
+
+// POST /puzzles
+async function addPuzzle(request, env) {
+  const formData = await request.formData();
+  const puzzleId = `puzzle-${Date.now()}`;
+  
+  const puzzleData = {
+    name: formData.get('name'),
+    desc: formData.get('desc'),
+    pieces: formData.get('pieces'),
+    level: formData.get('level'),
+    tags: formData.get('tags'),
+  };
+
+  const uploadedFiles = [];
+  for (const file of formData.getAll('files')) {
+    if (file.name) {
+      const key = `${puzzleId}/${file.name}`;
+      await env.PUZZLE_BUCKET.put(key, file.stream(), {
+        httpMetadata: { contentType: file.type },
+      });
+      uploadedFiles.push(key);
+    }
   }
 
-  // Check if puzzle already exists
-  const existingStmt = env.DB.prepare('SELECT id FROM puzzles WHERE id = ?');
-  const existing = await existingStmt.first(puzzleId);
-  
-  if (existing) {
-    return new Response(
-      JSON.stringify({ error: 'Puzzle with this ID already exists' }), 
-      { status: 409, headers: { 'Content-Type': 'application/json' } }
-    );
-  }
-
-  // Insert new puzzle
-  const stmt = env.DB.prepare(
-    'INSERT INTO puzzles (id, name, description, tags, pieces, svg_url) VALUES (?, ?, ?, ?, ?, ?)'
-  );
-  
-  await stmt.run(
+  await env.DB.prepare(
+    'INSERT INTO puzzles (id, name, description, pieces, level, tags, img) VALUES (?, ?, ?, ?, ?, ?, ?)'
+  ).bind(
     puzzleId,
-    name,
-    description || '',
-    JSON.stringify(tags || []),
-    pieces,
-    svg || ''
-  );
+    puzzleData.name,
+    puzzleData.desc,
+    puzzleData.pieces,
+    puzzleData.level,
+    JSON.stringify(puzzleData.tags.split(',').map(t => t.trim())),
+    JSON.stringify(uploadedFiles)
+  ).run();
 
-  return new Response(
-    JSON.stringify({ message: 'Puzzle added successfully', puzzleId }), 
-    { status: 200, headers: { 'Content-Type': 'application/json' } }
-  );
+  return new Response(JSON.stringify({ id: puzzleId, ...puzzleData, img: uploadedFiles }), {
+    status: 201,
+    headers: { 'Content-Type': 'application/json' },
+  });
 }
 
-/**
- * 8. POST /verify-admin - Verify admin credentials
- */
-async function handleVerifyAdmin(request, env) {
-  const { password } = await request.json();
+// PUT /puzzles/:id
+async function updatePuzzle(request, id, env) {
+  const formData = await request.formData();
   
-  if (!password) {
-    return new Response(
-      JSON.stringify({ error: 'Password is required' }), 
-      { status: 400, headers: { 'Content-Type': 'application/json' } }
-    );
+  const puzzleData = {
+    name: formData.get('name'),
+    desc: formData.get('desc'),
+    pieces: formData.get('pieces'),
+    level: formData.get('level'),
+    tags: formData.get('tags'),
+  };
+
+  const uploadedFiles = JSON.parse(formData.get('existingFiles') || '[]');
+  for (const file of formData.getAll('files')) {
+    if (file.name) {
+      const key = `${id}/${file.name}`;
+      await env.PUZZLE_BUCKET.put(key, file.stream(), {
+        httpMetadata: { contentType: file.type },
+      });
+      uploadedFiles.push(key);
+    }
   }
 
-  if (password === env.ADMIN_PASSWORD) {
-    return new Response(
-      JSON.stringify({ message: 'Admin verified successfully' }), 
-      { status: 200, headers: { 'Content-Type': 'application/json' } }
-    );
-  }
+  await env.DB.prepare(
+    'UPDATE puzzles SET name = ?, description = ?, pieces = ?, level = ?, tags = ?, img = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?'
+  ).bind(
+    puzzleData.name,
+    puzzleData.desc,
+    puzzleData.pieces,
+    puzzleData.level,
+    JSON.stringify(puzzleData.tags.split(',').map(t => t.trim())),
+    JSON.stringify(uploadedFiles),
+    id
+  ).run();
 
-  return new Response(
-    JSON.stringify({ error: 'Invalid credentials' }), 
-    { status: 401, headers: { 'Content-Type': 'application/json' } }
-  );
+  return new Response(JSON.stringify({ id, ...puzzleData, img: uploadedFiles }), {
+    status: 200,
+    headers: { 'Content-Type': 'application/json' },
+  });
 }
 
-/**
- * 9. PUT /update-admin - Update admin credentials
- */
-async function handleUpdateAdmin(request, env) {
-  const { password } = await request.json();
+// DELETE /puzzles/:id
+async function deletePuzzle(id, env) {
+  const puzzle = await env.DB.prepare('SELECT img FROM puzzles WHERE id = ?').bind(id).first();
   
-  if (!password) {
-    return new Response(
-      JSON.stringify({ error: 'New password is required' }), 
-      { status: 400, headers: { 'Content-Type': 'application/json' } }
-    );
+  if (puzzle) {
+    const images = JSON.parse(puzzle.img || '[]');
+    if (images.length > 0) {
+      // Consider bulk deletion for production
+      for (const key of images) {
+        await env.PUZZLE_BUCKET.delete(key);
+      }
+    }
   }
 
-  // Note: In a real implementation, you'd want to verify current admin first
-  // and store the new password in a secure way (KV or environment variable)
-  
-  return new Response(
-    JSON.stringify({ message: 'Admin password updated successfully' }), 
-    { status: 200, headers: { 'Content-Type': 'application/json' } }
-  );
+  await env.DB.prepare('DELETE FROM puzzles WHERE id = ?').bind(id).run();
+
+  return new Response(null, { status: 204 });
 }
