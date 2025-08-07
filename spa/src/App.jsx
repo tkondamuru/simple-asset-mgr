@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Plus, Edit, Trash2, UploadCloud, X } from 'lucide-react';
 
-const API_BASE = import.meta.env.DEV ? '/api' : '';
+const API_BASE = '/api';
 
 function App() {
   const [puzzles, setPuzzles] = useState([]);

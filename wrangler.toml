@@ -17,11 +17,6 @@ bucket_name = "puzzle-assets"
 [vars]
 ENVIRONMENT = "development"
 
-# Routes for custom domain (optional)
-# routes = [
-#   { pattern = "puzzle-api.example.com/*", zone_name = "example.com" }
-# ]
-
-# Site binding for serving SPA
-[site]
-bucket = "./spa/dist"
+[assets]
+directory = "./spa/dist"
+run_worker_first = [ "/api/*" ]
