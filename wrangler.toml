@@ -25,8 +25,3 @@ ENVIRONMENT = "development"
 # Site binding for serving SPA
 [site]
 bucket = "./spa/dist"
-
-# Routes for custom domain (optional)
-# routes = [
-#   { pattern = "puzzle-api.example.com/*", zone_name = "example.com" }
-# ]
