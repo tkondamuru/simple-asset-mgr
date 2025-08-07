@@ -17,9 +17,10 @@ bucket_name = "puzzle-assets"
 [vars]
 ENVIRONMENT = "development"
 
-# Build configuration
-[build]
-command = "npm run build"
+# Routes for custom domain (optional)
+# routes = [
+#   { pattern = "puzzle-api.example.com/*", zone_name = "example.com" }
+# ]
 
 # Site binding for serving SPA
 [site]
