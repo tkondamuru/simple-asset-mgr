@@ -101,7 +101,7 @@ const PuzzleCard = ({ puzzle, onEdit, onDelete }) => (
     <div className="card-images">
       {puzzle.img && puzzle.img.length > 0 ? (
         puzzle.img.map(img => (
-          <img key={img} src={`/r2/${img}`} alt={puzzle.name} className="card-img-thumbnail" />
+          <img key={img} src={`https://puzzle-assets.agility-maint.net/${img}`} alt={puzzle.name} className="card-img-thumbnail" />
         ))
       ) : (
         <div className="card-img-placeholder">No Image</div>
@@ -135,6 +135,7 @@ const PuzzleModal = ({ puzzle, onClose, onSuccess, showMessage }) => {
   });
   const [files, setFiles] = useState([]);
   const [existingFiles, setExistingFiles] = useState(puzzle?.img || []);
+  const [isSaving, setIsSaving] = useState(false);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -151,6 +152,7 @@ const PuzzleModal = ({ puzzle, onClose, onSuccess, showMessage }) => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setIsSaving(true);
     
     const data = new FormData();
     Object.keys(formData).forEach(key => data.append(key, formData[key]));
@@ -171,6 +173,8 @@ const PuzzleModal = ({ puzzle, onClose, onSuccess, showMessage }) => {
       onSuccess();
     } catch (error) {
       showMessage(error.message, 'error');
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -184,20 +188,20 @@ const PuzzleModal = ({ puzzle, onClose, onSuccess, showMessage }) => {
         <form onSubmit={handleSubmit} className="modal-body">
           <div className="form-group">
             <label>Name *</label>
-            <input name="name" value={formData.name} onChange={handleInputChange} required />
+            <input name="name" value={formData.name} onChange={handleInputChange} required disabled={isSaving} />
           </div>
           <div className="form-group">
             <label>Description</label>
-            <textarea name="desc" value={formData.desc} onChange={handleInputChange} rows={3}></textarea>
+            <textarea name="desc" value={formData.desc} onChange={handleInputChange} rows={3} disabled={isSaving}></textarea>
           </div>
           <div className="form-row">
             <div className="form-group">
               <label>Pieces *</label>
-              <input name="pieces" type="number" value={formData.pieces} onChange={handleInputChange} required />
+              <input name="pieces" type="number" value={formData.pieces} onChange={handleInputChange} required disabled={isSaving} />
             </div>
             <div className="form-group">
               <label>Level</label>
-              <select name="level" value={formData.level} onChange={handleInputChange}>
+              <select name="level" value={formData.level} onChange={handleInputChange} disabled={isSaving}>
                 <option>Easy</option>
                 <option>Medium</option>
                 <option>Hard</option>
@@ -206,14 +210,14 @@ const PuzzleModal = ({ puzzle, onClose, onSuccess, showMessage }) => {
           </div>
           <div className="form-group">
             <label>Tags (comma-separated)</label>
-            <input name="tags" value={formData.tags} onChange={handleInputChange} />
+            <input name="tags" value={formData.tags} onChange={handleInputChange} disabled={isSaving} />
           </div>
           <div className="form-group">
             <label>Images & Files</label>
             <div className="file-input-wrapper">
               <UploadCloud size={18} />
               <span>{files.length > 0 ? `${files.length} file(s) selected` : 'Choose files...'}</span>
-              <input type="file" multiple onChange={handleFileChange} />
+              <input type="file" multiple onChange={handleFileChange} disabled={isSaving} />
             </div>
           </div>
           
@@ -224,7 +228,7 @@ const PuzzleModal = ({ puzzle, onClose, onSuccess, showMessage }) => {
                 {existingFiles.map(file => (
                   <div key={file} className="file-item">
                     <span>{file.split('/').pop()}</span>
-                    <button type="button" onClick={() => removeExistingFile(file)}><X size={14} /></button>
+                    <button type="button" onClick={() => removeExistingFile(file)} disabled={isSaving}><X size={14} /></button>
                   </div>
                 ))}
               </div>
@@ -232,8 +236,17 @@ const PuzzleModal = ({ puzzle, onClose, onSuccess, showMessage }) => {
           )}
 
           <div className="modal-footer">
-            <button type="button" className="btn btn-secondary" onClick={onClose}>Cancel</button>
-            <button type="submit" className="btn btn-primary">Save Puzzle</button>
+            <button type="button" className="btn btn-secondary" onClick={onClose} disabled={isSaving}>Cancel</button>
+            <button type="submit" className="btn btn-primary" disabled={isSaving}>
+              {isSaving ? (
+                <>
+                  <span className="spinner-sm"></span>
+                  <span>Saving...</span>
+                </>
+              ) : (
+                'Save Puzzle'
+              )}
+            </button>
           </div>
         </form>
       </div>

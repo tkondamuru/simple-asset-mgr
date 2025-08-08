@@ -53,11 +53,16 @@ body {
   transition: all 0.2s ease;
 }
 
+.btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
 .btn-primary {
   background-color: #4a5568;
   color: white;
 }
-.btn-primary:hover {
+.btn-primary:hover:not(:disabled) {
   background-color: #2d3748;
 }
 
@@ -66,7 +71,7 @@ body {
   color: #2d3748;
   border-color: #cbd5e0;
 }
-.btn-secondary:hover {
+.btn-secondary:hover:not(:disabled) {
   background-color: #cbd5e0;
 }
 
@@ -119,6 +124,15 @@ body {
   height: 40px;
   animation: spin 1s linear infinite;
 }
+.spinner-sm {
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top: 2px solid #fff;
+  border-radius: 50%;
+  width: 16px;
+  height: 16px;
+  animation: spin 1s linear infinite;
+}
+
 @keyframes spin {
   0% { transform: rotate(0deg); }
   100% { transform: rotate(360deg); }
@@ -142,8 +156,12 @@ body {
 .card-images {
   display: flex;
   gap: 0.5rem;
-  padding: 1rem 1rem 0;
+  padding: 1rem;
   flex-wrap: wrap;
+  max-height: 180px;
+  overflow-y: auto;
+  background-color: #f7fafc;
+  border-bottom: 1px solid #e2e8f0;
 }
 .card-img-thumbnail {
   width: 60px;
