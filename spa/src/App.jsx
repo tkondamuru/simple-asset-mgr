@@ -97,7 +97,7 @@ function App() {
 }
 
 const PuzzleCard = ({ puzzle, onEdit, onDelete }) => {
-  const imageFiles = puzzle.img?.filter(file => /\.(jpe?g|png|gif|webp)$/i.test(file)) || [];
+  const imageFiles = puzzle.img?.filter(file => /\.(jpe?g|png|gif|svg|webp)$/i.test(file)) || [];
 
   return (
     <div className="puzzle-card">
