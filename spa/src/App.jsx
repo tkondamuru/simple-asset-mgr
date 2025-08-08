@@ -96,34 +96,38 @@ function App() {
   );
 }
 
-const PuzzleCard = ({ puzzle, onEdit, onDelete }) => (
-  <div className="puzzle-card">
-    <div className="card-images">
-      {puzzle.img && puzzle.img.length > 0 ? (
-        puzzle.img.map(img => (
-          <img key={img} src={`https://puzzle-assets.agility-maint.net/${img}`} alt={puzzle.name} className="card-img-thumbnail" />
-        ))
-      ) : (
-        <div className="card-img-placeholder">No Image</div>
-      )}
-    </div>
-    <div className="card-content">
-      <h3>{puzzle.name}</h3>
-      <p className="desc">{puzzle.description}</p>
-      <div className="details">
-        <span><strong>Level:</strong> {puzzle.level}</span>
-        <span><strong>Pieces:</strong> {puzzle.pieces}</span>
+const PuzzleCard = ({ puzzle, onEdit, onDelete }) => {
+  const imageFiles = puzzle.img?.filter(file => /\.(jpe?g|png|gif|webp)$/i.test(file)) || [];
+
+  return (
+    <div className="puzzle-card">
+      <div className="card-images">
+        {imageFiles.length > 0 ? (
+          imageFiles.map(img => (
+            <img key={img} src={`https://puzzle-assets.agility-maint.net/${img}`} alt={puzzle.name} className="card-img-thumbnail" />
+          ))
+        ) : (
+          <div className="card-img-placeholder">No Images</div>
+        )}
       </div>
-      <div className="tags">
-        {puzzle.tags.map(tag => <span key={tag} className="tag">{tag}</span>)}
+      <div className="card-content">
+        <h3>{puzzle.name}</h3>
+        <p className="desc">{puzzle.description}</p>
+        <div className="details">
+          <span><strong>Level:</strong> {puzzle.level}</span>
+          <span><strong>Pieces:</strong> {puzzle.pieces}</span>
+        </div>
+        <div className="tags">
+          {puzzle.tags.map(tag => <span key={tag} className="tag">{tag}</span>)}
+        </div>
+      </div>
+      <div className="card-actions">
+        <button className="btn-icon" onClick={() => onEdit(puzzle)}><Edit size={18} /></button>
+        <button className="btn-icon btn-danger" onClick={() => onDelete(puzzle.id)}><Trash2 size={18} /></button>
       </div>
     </div>
-    <div className="card-actions">
-      <button className="btn-icon" onClick={() => onEdit(puzzle)}><Edit size={18} /></button>
-      <button className="btn-icon btn-danger" onClick={() => onDelete(puzzle.id)}><Trash2 size={18} /></button>
-    </div>
-  </div>
-);
+  );
+};
 
 const PuzzleModal = ({ puzzle, onClose, onSuccess, showMessage }) => {
   const [formData, setFormData] = useState({
